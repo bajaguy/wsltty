@@ -26,12 +26,12 @@ copy "add to context menu.lnk" "%installdir%"
 copy "add default to context menu.lnk" "%installdir%"
 copy "remove from context menu.lnk" "%installdir%"
 copy "configure WSL shortcuts.lnk" "%installdir%"
-copy "WSL Terminal.lnk" "%installdir%"
-copy "WSL Terminal %%.lnk" "%installdir%"
+rem copy "WSL Terminal.lnk" "%installdir%"
+rem copy "WSL Terminal %%.lnk" "%installdir%"
 copy config-distros.sh "%installdir%"
 copy mkshortcut.vbs "%installdir%"
 rem allow persistent customization of default icon:
-if not exist "%installdir%"\wsl.ico copy wsl.ico "%installdir%"
+if not exist "%installdir%\wsl.ico" copy tux.ico "%installdir%\wsl.ico"
 
 if not exist "%installdir%\bin" goto instbin
 rem move previous programs possibly in use out of the way
@@ -60,10 +60,13 @@ mkdir "%installdir%\usr\share\mintty\lang"
 copy lang.zoo "%installdir%\usr\share\mintty\lang"
 mkdir "%installdir%\usr\share\mintty\themes"
 copy themes.zoo "%installdir%\usr\share\mintty\themes"
+mkdir "%installdir%\usr\share\mintty\sounds"
+copy sounds.zoo "%installdir%\usr\share\mintty\sounds"
 mkdir "%installdir%\usr\share\mintty\info"
 copy charnames.txt "%installdir%\usr\share\mintty\info"
 mkdir "%installdir%\usr\share\mintty\icon"
-copy wsl.ico "%installdir%\usr\share\mintty\icon"
+copy tux.ico "%installdir%\usr\share\mintty\icon"
+copy mintty.ico "%installdir%\usr\share\mintty\icon"
 
 
 rem create Start Menu Folder
@@ -78,8 +81,8 @@ copy "add to context menu.lnk" "%smf%"
 copy "add default to context menu.lnk" "%smf%"
 copy "remove from context menu.lnk" "%smf%"
 copy "configure WSL shortcuts.lnk" "%smf%"
-copy "WSL Terminal.lnk" "%smf%"
-copy "WSL Terminal %%.lnk" "%smf%"
+rem copy "WSL Terminal.lnk" "%smf%"
+rem copy "WSL Terminal %%.lnk" "%smf%"
 rem clean up previous installation
 rmdir /S /Q "%smf%\context menu shortcuts"
 
@@ -88,6 +91,8 @@ cd /D "%installdir%\usr\share\mintty\lang"
 "%installdir%\bin\zoo" xO lang
 cd /D "%installdir%\usr\share\mintty\themes"
 "%installdir%\bin\zoo" xO themes
+cd /D "%installdir%\usr\share\mintty\sounds"
+"%installdir%\bin\zoo" xO sounds
 
 
 :migrate configuration
@@ -110,8 +115,8 @@ rmdir "%oldroot%\home"
 
 rem create user config directory and subfolders
 mkdir "%configdir%\lang"
-mkdir "%configdir%\sounds"
 mkdir "%configdir%\themes"
+mkdir "%configdir%\sounds"
 
 rem create config file if it does not yet exist
 if not exist "%configdir%\config" echo # To use common configuration in %%APPDATA%%\mintty, simply remove this file>"%configdir%\config"

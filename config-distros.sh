@@ -97,21 +97,33 @@ echo Creating %1.bat
 
 echo @echo off> %1.bat
 echo rem Start mintty terminal for WSL package %name% in current directory>> %1.bat
-echo %target% -i "%icon%" %minttyargs% %bridgeargs%>> %1.bat
+echo %target% -i "%icon%" %minttyargs% %bridgeargs% %%*>> %1.bat
 /EOB
 fi
 
 lxss="/HKEY_CURRENT_USER/Software/Microsoft/Windows/CurrentVersion/Lxss"
 schema="/HKEY_CURRENT_USER/Software/Classes/Local Settings/Software/Microsoft/Windows/CurrentVersion/AppModel/SystemAppData"
 
-#(regtool list "$lxss" 2>/dev/null && echo || echo "No WSL packages registered" >&2) |
-(
-  if $alldistros
-  then  regtool list "$lxss" 2>/dev/null
-  else  true
-  fi && echo || echo "No WSL packages registered" >&2) |
-while read guid
-do
+appex () {
+  while read line
+  do
+	case "$line" in
+	*Application*Executable*)
+		for item in $line
+		do	case "$item" in
+			Executable=*)
+				eval $item
+				echo "$Executable"
+				break;;
+			esac
+		done
+		break;;
+	esac
+  done < $*
+}
+
+config () {
+  guid="$1"
   ok=false
   case $guid in
   {*)
@@ -131,7 +143,13 @@ do
     if package=`regtool -q get "$lxss/$guid/PackageFamilyName"`
     then
     	instdir=`regtool get "$schema/$package/Schemas/PackageFullName"`
-    	if [ -r "$ProgramW6432/WindowsApps/$instdir/images/icon.ico" ]
+    	# get actual executable path (may not match $distro) from app manifest
+    	manifest="$ProgramW6432/WindowsApps/$instdir/AppxManifest.xml"
+    	psh_cmd='([xml]$(Get-Content '"\"$manifest\""')).Package.Applications.Application.Executable'
+    	executable=`appex "$manifest"`
+    	if [ -r "$ProgramW6432/WindowsApps/$instdir/$executable" ]
+    	then	icon="%PROGRAMFILES%/WindowsApps/$instdir/$executable"
+    	elif [ -r "$ProgramW6432/WindowsApps/$instdir/images/icon.ico" ]
     	then	icon="%PROGRAMFILES%/WindowsApps/$instdir/images/icon.ico"
     	else	icon="$installdir"'\wsl.ico'
     	fi
@@ -151,7 +169,7 @@ do
     bridgeargs='--distro-guid "'"$guid"'" -t'
 
     ok=true;;
-  "")	# WSL default installation
+  DefaultDistribution|"")	# WSL default installation
     distro=
     name=WSL
     icon="$installdir"'\wsl.ico'
@@ -167,11 +185,18 @@ do
   echoc "- icon $icon"
   echoc "- root $root"
   target="$installdir"'\bin\mintty.exe'
-  bridgeargs=" "
+  bridgeargs=" "	# deprecated
+
+  if $ok && [ -n "$distro" ]
+  then	# fix #163: backend missing +x with certain mount options
+	echo Setting +x wslbridge-backend for distro "'$distro'"
+	(cd "$LOCALAPPDATA/wsltty/bin"; wsl.exe -d "$distro" chmod +x wslbridge-backend)
+#	(cd "$LOCALAPPDATA/wsltty/bin"; "$SYSTEMROOT/System32/bash.exe" "$guid" -c chmod +x wslbridge-backend)
+  fi
 
   if $ok && $config
   then
-    export target minttyargs bridgeargs icon
+    export name target minttyargs bridgeargs icon
 
     if $contextmenu
     then
@@ -218,7 +243,14 @@ do
 
         # default desktop shortcut in ~ -> Desktop
         if [ "$name" = "WSL" ]
-        then	cmd /C copy "$name Terminal.lnk" "%USERPROFILE%\\Desktop"
+        then
+              #cmd /C copy "$name Terminal.lnk" "%USERPROFILE%\\Desktop"
+              #cmd /C copy "$name Terminal.lnk" "%APPDATA%\\..\\Desktop\\"
+              # the above does not work reliably (see #166)
+              # determine actual Desktop folder
+              desktopkey='\HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders\Desktop'
+              desktop=`regtool get "$desktopkey"`
+              cmd /C copy "$name Terminal.lnk" "$desktop\\"
         fi
 
         # launch script in ~ -> WSLtty home, WindowsApps launch folder
@@ -229,4 +261,18 @@ do
 
     fi
   fi
+}
+
+# ensure proper parameter passing to cmd /C
+chcp.com 65001 # just in case; seems to work without as well
+
+# configure for all distros, plus default distro
+for guid in `
+  if $alldistros
+  then  regtool list "$lxss" 2>/dev/null
+  else  echo DefaultDistribution
+  fi || echo "No WSL packages registered" >&2
+`
+do	config $guid
 done
+
